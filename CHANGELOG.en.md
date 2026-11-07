@@ -11,7 +11,7 @@
 - Integrate high-refresh performance changes. Backgrounds follow native rAF cadence with overload protection, hidden-tab suspension, and explicit caps. Normalize particle trails, damping, and brightness over time, and interpolate profile-card rendering between fixed physics steps.
 - Animate ruler ticks with transforms and cache intro canvas geometry through ResizeObserver. Retain the glass intro and no-WebGL fallback restored in 0.6.2.
 - Scan newly inserted comment subtrees, use a Map and explicit stack for reply ordering, and skip unchanged style writes. Add privacy, performance, and development security checks.
-
+- When the Home search box is turned off, the compact toolbar search cycles through Bilibili trending searches with the same transition as the main search; the same applies when it appears while scrolling.
 ## [v0.6.3](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.3) · Pending release
 
 - Restore livestream reservation cards in followed feeds, creator spaces, and reposts, including titles, schedules, reservation counts, and server-provided button states (#98).
