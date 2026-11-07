@@ -11,7 +11,8 @@
 - Integrate high-refresh performance changes. Backgrounds follow native rAF cadence with overload protection, hidden-tab suspension, and explicit caps. Normalize particle trails, damping, and brightness over time, and interpolate profile-card rendering between fixed physics steps.
 - Animate ruler ticks with transforms and cache intro canvas geometry through ResizeObserver. Retain the glass intro and no-WebGL fallback restored in 0.6.2.
 - Scan newly inserted comment subtrees, use a Map and explicit stack for reply ordering, and skip unchanged style writes. Add privacy, performance, and development security checks.
-
+- Remove the holographic strip on the right edge of the avatar ID card so it is no longer mistaken for a scrollbar.
+- Fix the "快捷入口" label on the back of the avatar ID card wrapping onto two lines; tighten the icon gap and size so the label stays on one line.
 ## [v0.6.3](https://github.com/jiuyang5354/bilibili-margin/releases/tag/v0.60.3) · Pending release
 
 - Restore livestream reservation cards in followed feeds, creator spaces, and reposts, including titles, schedules, reservation counts, and server-provided button states (#98).
