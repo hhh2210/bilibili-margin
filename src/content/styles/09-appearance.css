@@ -20,7 +20,7 @@
 .app[data-glass="flat"] :is(.search,.et,.hero-search,.sheet,.idcl-card,.cp-panel,.gf-menu,.dp,.wx) {
   background:var(--surface);box-shadow:var(--ring);
 }
-.app[data-glass="flat"] :is(.gf-frost,.gf-shadow,.gf-back-sheen,.gf-tint,.idcl-holo) { display:none; }
+.app[data-glass="flat"] :is(.gf-frost,.gf-shadow,.gf-back-sheen,.gf-tint) { display:none; }
 .app[data-glass="flat"] :is(.gf-front,.gf-back) { background:var(--surface);box-shadow:none; }
 .app.margin-ui-still :not(.bg,.bg *,.wx-sky,.wx-sky *),
 .app.margin-ui-still :not(.bg,.bg *,.wx-sky,.wx-sky *)::before,

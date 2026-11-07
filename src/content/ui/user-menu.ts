@@ -101,7 +101,6 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
 
   const front = h('div', { class: 'idcl-face idcl-front' },
     h('div', { class: 'idcl-hole' }),
-    h('div', { class: 'idcl-holo' }),
     h('div', { class: 'idcl-header' },
       h('div', { class: 'idcl-brand' },
         h('span', { class: 'idcl-brand-mark' }, '▲'),
@@ -145,7 +144,6 @@ function mountCard(a: Account, wrap: HTMLElement, trigger: HTMLElement, face: (p
   });
   const back = h('div', { class: 'idcl-face idcl-back' },
     h('div', { class: 'idcl-hole' }),
-    h('div', { class: 'idcl-holo' }),
     h('div', { class: 'idcl-stripe' }),
     h('div', { class: 'idcl-idnum' }, h('span', {}, `NO. ${a.mid}`), h('em', {}, `LV${a.level}`)),
     barcode(a.mid),
