@@ -90,6 +90,94 @@ export async function spaceCollectionVideos(mid: number, collection: SpaceCollec
   return { list, total: d.page?.total ?? d.meta?.total ?? collection.total };
 }
 
+/** 搜索 / 合集匹配用的关键词归一化：合集名和视频标题的空格写法不一致（「从零开始的 AI 学习」vs「从零开始的AI学习」），去掉空白再比 */
+export function normQuery(s: unknown): string {
+  return String(s ?? '').toLowerCase().replace(/\s+/g, '');
+}
+
+/**
+ * 空间搜索要翻合集，这里按 mid / mid+合集 缓存，一次会话只请求一遍（GitHub #113）。
+ * 失败也缓存空数组：搜索是附加能力，不能因为合集接口挂了就让投稿搜索报错。
+ */
+const collectionListCache = new Map<number, Promise<SpaceCollection[]>>();
+const collectionVideoCache = new Map<string, Promise<Video[]>>();
+
+export function spaceCollectionsAll(mid: number): Promise<SpaceCollection[]> {
+  let cached = collectionListCache.get(mid);
+  if (!cached) {
+    cached = (async () => {
+      const list: SpaceCollection[] = [];
+      for (let page = 1; page <= 3; page++) {
+        const r = await spaceCollections(mid, page);
+        list.push(...r.list);
+        if (!r.list.length || list.length >= r.total) break;
+      }
+      return list;
+    })().catch(() => [] as SpaceCollection[]);
+    collectionListCache.set(mid, cached);
+  }
+  return cached;
+}
+
+export function collectionVideosAll(mid: number, collection: SpaceCollection, maxPages = 2): Promise<Video[]> {
+  const key = `${mid}:${collection.kind}:${collection.id}:${maxPages}`;
+  let cached = collectionVideoCache.get(key);
+  if (!cached) {
+    cached = (async () => {
+      const list: Video[] = [];
+      for (let page = 1; page <= maxPages; page++) {
+        const r = await spaceCollectionVideos(mid, collection, page);
+        list.push(...r.list);
+        if (!r.list.length || list.length >= r.total) break;
+      }
+      return list;
+    })().catch(() => [] as Video[]);
+    collectionVideoCache.set(key, cached);
+  }
+  return cached;
+}
+
+export interface SpaceSearch { list: Video[]; collection?: SpaceCollection }
+
+/**
+ * 空间搜索（GitHub #113）：投稿接口之外，再按合集名 / 合集内标题补一批。
+ * 合集里的视频标题常带「【合集名】」前缀、空格写法还不统一，只靠投稿接口的 keyword 会漏。
+ */
+export async function searchSpace(mid: number, keyword: string, order: VideoOrder): Promise<SpaceSearch> {
+  const base = await spaceVideos(mid, 1, order, keyword);
+  const q = normQuery(keyword);
+  if (!q) return { list: base.list };
+  const collections = await spaceCollectionsAll(mid);
+  const byName = collections.filter((c) => normQuery(c.name).includes(q)).slice(0, 3);
+  const extra: Video[] = [];
+  if (byName.length) {
+    for (const list of await Promise.all(byName.map((c) => collectionVideosAll(mid, c)))) extra.push(...list);
+  } else if (!base.list.length && collections.length) {
+    // 投稿搜索没结果：扫前 10 个合集的首屏按标题兜底，并发 3、总预算 5 秒
+    const pool = collections.slice(0, 10);
+    const deadline = Date.now() + 5000;
+    let next = 0;
+    const worker = async () => {
+      while (next < pool.length && Date.now() < deadline) {
+        const c = pool[next++];
+        for (const v of await collectionVideosAll(mid, c, 1)) if (normQuery(v.title).includes(q)) extra.push(v);
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+  }
+  if (!extra.length) return { list: base.list };
+  const seen = new Set<string>();
+  const merged: Video[] = [];
+  for (const v of [...base.list, ...extra]) {
+    const key = v.bvid || `${v.mid}:${v.title}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(v);
+  }
+  merged.sort((a, b) => (order === 'click' ? b.views - a.views : b.pubdate - a.pubdate));
+  return { list: merged, collection: byName[0] };
+}
+
 export async function spaceVideos(mid: number, pn: number, order: VideoOrder, keyword = ''): Promise<{ list: Video[]; total: number }> {
   const d = await getWbi<any>('/x/space/wbi/arc/search', { mid, ps: 30, pn, order, tid: 0, keyword, order_avoided: 'true', platform: 'web', web_location: 1550101 });
   const list: Video[] = (d.list?.vlist ?? []).map((v: any) => ({

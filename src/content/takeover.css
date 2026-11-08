@@ -73,6 +73,13 @@ html.margin-reduce .sp-menu { animation: none; }
 .sp-collection-head[hidden] { display: none; }
 .sp-collection-head h2 { margin: 0; font: 500 22px/1.4 var(--serif); overflow-wrap: anywhere; }
 .sp-collection-head .ghost { flex: none; }
+/* 搜索结果上方的合集入口（GitHub #113）：合集名命中时直接从搜索进合集 */
+.sp-search-hit-box { padding: 4px 0 12px; }
+.sp-search-hit-box[hidden] { display: none; }
+.sp-search-hit { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border: 0; border-radius: 14px; background: var(--chip); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: background-color .2s var(--ease-out); }
+.sp-search-hit:hover { background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.sp-search-hit-name { font: 500 15px/1.4 var(--serif); overflow-wrap: anywhere; }
+.sp-search-hit-meta { margin-left: auto; flex: none; font: 500 12px/1 var(--mono); color: var(--faint); }
 
 /* 列表视图（21st Editorial service list）：编号 · 小封面 · 衬线标题 · 右侧小注 */
 .vlist { display: flex; flex-direction: column; border-top: 1px solid var(--line); margin-top: 8px; }
