@@ -1,4 +1,4 @@
-import { compute, draw, effect, frame, init, storage, surface, target, type Gpu, type Surface, type Target } from 'vgpu';
+import { compute, draw, effect, frame, init, storage, surface, target, type Gpu, type InitOptions, type Surface, type Target } from 'vgpu';
 import simWgsl from './sim.wgsl';
 import dotsWgsl from './dots.wgsl';
 import fadeWgsl from './fade.wgsl';
@@ -12,6 +12,22 @@ import { fluxTiming } from './timing';
  */
 const COUNT = 24000;
 const FLOATS = 8;
+
+/**
+ * Windows 上的 Chromium 会忽略 requestAdapter() 的 powerPreference，并且每次调用都往
+ * 控制台打一条警告（crbug.com/369219127）。在 Windows 上干脆不提这个要求，其他平台
+ * 仍保留 low-power 偏好。优先用扩展自带的 getPlatformInfo（不受 UA 冻结/缩减影响），
+ * 取不到（非扩展上下文、旧运行时）再退回 UA 与 navigator.platform。
+ */
+async function isWindows(): Promise<boolean> {
+  try {
+    return (await chrome.runtime.getPlatformInfo()).os === 'win';
+  } catch { /* 非扩展上下文或 API 不可用 */ }
+  const ua = navigator as Navigator & { userAgentData?: { platform?: string } };
+  const platform = ua.userAgentData?.platform ?? navigator.platform ?? '';
+  return /win/i.test(platform) || /Windows NT/i.test(navigator.userAgent);
+}
+
 type RGB = readonly [number, number, number];
 export interface FluxColors { bg: RGB; c1: RGB; c2: RGB; c3: RGB }
 
@@ -34,7 +50,10 @@ export class FluxField {
 
   async start(): Promise<boolean> {
     try {
-      const gpu = await init({ powerPreference: 'low-power', requiredLimits: { maxStorageBuffersInVertexStage: 1 } });
+      const options: InitOptions = (await isWindows())
+        ? { requiredLimits: { maxStorageBuffersInVertexStage: 1 } }
+        : { powerPreference: 'low-power', requiredLimits: { maxStorageBuffersInVertexStage: 1 } };
+      const gpu = await init(options);
       if (this.dead) { gpu.dispose(); return false; }
       this.gpu = gpu;
       const buf = new Float32Array(COUNT * FLOATS);
