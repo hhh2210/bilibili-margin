@@ -1,6 +1,7 @@
 import { every } from '../sched';
 import { loadSettings, onSettingsChange, type Settings } from '../../shared/settings';
 import { account, dynamicUpdates, resetDynamicBaseline, unreadTotal } from '../api/account';
+import { onMsgRead } from '../api/msg';
 import { h, icon, ICONS, setMarkup } from './dom';
 import { createExpandableTabs, type TabItem, type TabSpec } from './expandable-tabs';
 import { createUserMenu } from './user-menu';
@@ -71,6 +72,11 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
   });
 
   const tabsNav = createExpandableTabs(o.tabs);
+  // 点顶栏「消息」或悬停面板里的分类行都会开新标签页：先乐观清掉本页角标，
+  // 消息页读完列表后广播 margin:msg-read，onMsgRead 再按服务端真值对齐（含误清纠正）
+  addEventListener('click', (e) => {
+    if (e.composedPath().some((n) => n instanceof HTMLAnchorElement && /^https:\/\/message\.bilibili\.com\//.test(n.href))) tabsNav.badge('msg', 0);
+  }, true);
   // 直播 / 消息 / 动态 / 历史 / 收藏 / 稍后：停留 1.5 秒弹出悬停列表
   let msgPop: PopHandle | null = null;
   const popHandles: PopHandle[] = [];
@@ -114,15 +120,19 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
     userSlot.replaceWith(createUserMenu(a));
     // 消息中心里点开消息后（v0.46）重新拉一次未读，顶栏角标立刻跟上；关闭消息提醒时完全忽略
     let unreadT = 0;
-    addEventListener('margin:unread', () => {
+    addEventListener('margin:unread', (e) => {
       if (!msgOn) return;
-      clearTimeout(unreadT); unreadT = window.setTimeout(() => unreadTotal().then((n) => tabsNav.badge('msg', n)).catch(() => {}), 600);
+      clearTimeout(unreadT);
+      // 事件里带了刚取到的未读总数（下拉面板 / 消息页）：直接用，避免再发一次请求、口径或时点又对不上
+      const total = (e as CustomEvent<{ total?: number }>).detail?.total;
+      if (typeof total === 'number') { tabsNav.badge('msg', total); return; }
+      unreadT = window.setTimeout(() => unreadTotal().then((n) => tabsNav.badge('msg', n)).catch(() => {}), 600);
     });
     // 未读角标：页面可见时每 2 分钟问一次；切回标签页时立即刷新。
     // 消息提醒同时管动态：关闭后消息和动态的角标都不再轮询。
     let polled = 0;
-    const pollMsg = () => {
-      if (!msgOn || document.hidden) return;
+    const pollMsg = (force = false) => {
+      if (!msgOn || (document.hidden && !force)) return;
       polled = Date.now();
       unreadTotal().then((n) => tabsNav.badge('msg', n)).catch(() => {});
     };
@@ -134,6 +144,8 @@ export function createHeader(o: { tabs: TabItem[]; onTheme: () => void; onSearch
     const poll = () => { pollDyn(); pollMsg(); };
     poll();
     every(120_000, poll);
+    // 消息在别的标签页被读掉：立刻按服务端真值对齐（隐藏页也更新，切回来不会挂着旧数字）
+    onMsgRead(() => pollMsg(true));
     // 刚在别的标签读完消息也要更新；只合并同一次恢复触发的 focus / visibility 事件。
     const onReturn = () => { if (Date.now() - polled > 500) poll(); };
     document.addEventListener('visibilitychange', () => { if (!document.hidden) onReturn(); });

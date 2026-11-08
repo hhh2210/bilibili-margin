@@ -1,6 +1,6 @@
 import type { Settings } from '../../shared/settings';
 import { nav } from '../api/http';
-import { ackSession, ats, fillPeople, likes, messages, readAllMessages, readAllSessions, replies, sessions, system, systemRead, unread, type MessageEmote, type Msg, type MsgCard, type Notice, type Page, type Session, type Unread } from '../api/msg';
+import { ackSession, ats, fillPeople, likes, markMsgRead, messages, readAllMessages, readAllSessions, replies, sessions, system, systemRead, unread, type MessageEmote, type Msg, type MsgCard, type Notice, type Page, type Session, type Unread } from '../api/msg';
 import { dayBucket, fmtAgo, h, icon, ICONS } from './dom';
 import { openLightbox } from './lightbox';
 import { toast } from './controls';
@@ -60,6 +60,8 @@ export class MessageApp {
   private gen = 0;
   /** 上次刷新当前视图的时间：标签页切回来太久没刷就自动重拉（点赞/回复不刷新的反馈） */
   private shownAt = 0;
+  /** 页面加载完成后「刷新」按钮的自动点击，每次页面加载只点一次（防循环） */
+  private bootClick = false;
   /** 已推过已读游标的视图：15 秒轮询会反复走 feed()，游标只推一次 */
   private marked = new Set<View>();
 
@@ -144,6 +146,10 @@ export class MessageApp {
       try {
         const failed = await readAllMessages(csrf());
         const u = await this.refreshUnread();
+        // 上游「全部已读」不走 setCount()，需在此补一次跨标签广播：
+        // 其他标签页收到后按服务端真值重拉角标（含 1.5s 二次拉取覆盖已读落库延迟），
+        // 部分分类失败也不会被误清成 0
+        markMsgRead();
         if (u?.chat === 0) this.pane.querySelectorAll('.wh-dot').forEach((dot) => dot.remove());
         const names = { reply:'回复',at:'@ 我的',like:'赞',system:'系统通知',chat:'私信' };
         toast(this.shell.app, failed.length ? `未能全部完成：${failed.map((key) => names[key]).join('、')}` : !u ? '已处理，暂未刷新未读数' : Object.values(u).some((n) => n > 0) ? '已处理，仍有未读消息' : '消息已全部标为已读');
@@ -191,8 +197,8 @@ export class MessageApp {
     if (!u) return null;
     const n: Record<View, number> = { whisper: u.chat, reply: u.reply, at: u.at, like: u.like, system: u.system };
     this.nav.querySelectorAll<HTMLElement>('.ms-item').forEach((b) => { const c = n[b.dataset.view as View]; b.querySelector('.ms-n')!.textContent = c ? (c > 99 ? '99+' : String(c)) : ''; });
-    // 顶栏角标同步：进页面拿到最新未读后，让顶栏「消息」角标也跟着对齐
-    dispatchEvent(new CustomEvent('margin:unread'));
+    // 顶栏角标同步：直接带上本次取到的未读总数，避免顶栏另发一次请求拿到不同口径的数字
+    dispatchEvent(new CustomEvent('margin:unread', { detail: { total: u.reply + u.at + u.like + u.system + u.chat } }));
     return u;
   }
 
@@ -203,7 +209,9 @@ export class MessageApp {
     const cur = el.textContent === '99+' ? 100 : Number(el.textContent) || 0;
     const n = Math.max(0, f(cur));
     el.textContent = n ? (n > 99 ? '99+' : String(n)) : '';
-    dispatchEvent(new CustomEvent('margin:unread'));
+    // 走跨标签页广播（顶栏消息入口是新标签页，页内事件传不过去），所有页面的角标按服务端真值对齐；
+    // 不再派发无 total 的 margin:unread，消掉 600ms 重拉与服务端已读落库之间的竞态
+    markMsgRead();
   }
 
   private go(v: View): void {
@@ -265,6 +273,11 @@ export class MessageApp {
           if (v === 'system') {
             if (p.top && p.top !== '0' && !this.marked.has(v)) systemRead(p.top, csrf()).then(() => { this.marked.add(v);this.setCount(v, () => 0); }).catch(() => {});
           } else this.setCount(v, () => 0);
+          // 页面加载完成后，触发一次「刷新」按钮的点击操作（用户要求；每次页面加载只点一次，防循环）
+          if (!this.bootClick) {
+            this.bootClick = true;
+            this.pane.querySelector<HTMLButtonElement>('.ms-refresh')?.click();
+          }
         }
         cursor = p.cursor;
         more.hidden = !cursor;
